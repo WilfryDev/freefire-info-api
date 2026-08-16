@@ -1,52 +1,47 @@
-const axios = require('axios');
-
 module.exports = async (req, res) => {
+  res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+  );
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  const uid = req.query.uid || req.query.id;
-  const region = (req.query.region || 'NA').toUpperCase();
-
-  if (!uid) {
-    return res.status(400).json({ error: 'Missing uid parameter' });
-  }
-
-  // Consulta a múltiples fuentes públicas de respaldo
-  const sources = [
-    `https://freefire-api-seven.vercel.app/api/info?uid=${uid}&region=${region}`,
-    `https://ff-api-src.vercel.app/api/player?uid=${uid}&region=${region}`
-  ];
-
-  for (const url of sources) {
-    try {
-      const response = await axios.get(url, { timeout: 6000 });
-      if (response.data && !response.data.error) {
-        return res.status(200).json(response.data);
-      }
-    } catch (e) {
-      // Pasa a la siguiente fuente
-    }
-  }
-
-  // Respaldo directo desde Pagostore (Garena)
   try {
-    const pagostoreRes = await axios.post('https://pagostore.com/api/auth/player_id_login', {
-      app_id: 100067,
-      login_id: uid
-    }, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      timeout: 5000
+    const uid = req.query.uid || req.query.id;
+    const region = (req.query.region || 'NA').toUpperCase();
+
+    if (!uid) {
+      return res.status(400).json({ error: 'Falta el parámetro UID' });
+    }
+
+    // Consulta directa a la API de Pagostore (Servidor oficial de Garena)
+    const response = await fetch('https://pagostore.com/api/auth/player_id_login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      },
+      body: JSON.stringify({
+        app_id: 100067,
+        login_id: String(uid)
+      })
     });
 
-    if (pagostoreRes.data && pagostoreRes.data.nickname) {
+    if (!response.ok) {
+      return res.status(500).json({ error: 'Error al conectar con los servidores de Garena' });
+    }
+
+    const data = await response.json();
+
+    if (data && data.nickname) {
       return res.status(200).json({
         basicInfo: {
-          nickname: pagostoreRes.data.nickname,
+          nickname: data.nickname,
           accountId: uid,
           region: region,
           level: 1,
@@ -54,9 +49,10 @@ module.exports = async (req, res) => {
         }
       });
     }
-  } catch (e) {
-    // Si falla Pagostore
-  }
 
-  return res.status(500).json({ error: 'No se pudo obtener la información del jugador' });
+    return res.status(404).json({ error: 'ID de jugador no encontrado' });
+
+  } catch (err) {
+    return res.status(500).json({ error: 'Error interno en la función serverless', details: err.message });
+  }
 };
