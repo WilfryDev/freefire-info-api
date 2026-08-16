@@ -1,4 +1,4 @@
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
@@ -19,7 +19,6 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'Falta el parámetro UID' });
     }
 
-    // Consulta directa a la API de Pagostore (Servidor oficial de Garena)
     const response = await fetch('https://pagostore.com/api/auth/player_id_login', {
       method: 'POST',
       headers: {
@@ -55,4 +54,4 @@ module.exports = async (req, res) => {
   } catch (err) {
     return res.status(500).json({ error: 'Error interno en la función serverless', details: err.message });
   }
-};
+}
